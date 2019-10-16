@@ -1,4 +1,7 @@
 */*/.*
 */*/__pycache__
-*/*/*data*
+*/*/*data
 */*/*.gz
+*/*/MNIST
+*/*/simple_image_classification
+*/*/.*

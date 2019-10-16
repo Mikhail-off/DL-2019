@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
+from IPython.display import clear_output
 
 class ModelTrainer:
     def __init__(self, train_generator, test_generator):
@@ -11,6 +12,9 @@ class ModelTrainer:
 
     def set_model(self, model):
         self.__model = model
+
+    def get_model(self):
+        return self.__model
 
     def train_epoch(self, optimizer, batch_size=32, cuda=True):
         assert self.__model is not None
@@ -39,14 +43,14 @@ class ModelTrainer:
         return loss_log, acc_log, steps
         
 
-    def train(self, n_epochs, batch_size=32, cuda=True, plot_history=None):
+    def train(self, n_epochs, batch_size=32, lr=1e-3, cuda=True, plot_history=None):
         assert self.__model is not None
     
         model = self.__model
         if cuda:
             model.cuda()
 
-        opt = opt = torch.optim.Adam(model.parameters(), lr=0.001)
+        opt = opt = torch.optim.Adam(model.parameters(), lr=lr)
 
         train_log, train_acc_log = [], []
         val_log, val_acc_log = [], []

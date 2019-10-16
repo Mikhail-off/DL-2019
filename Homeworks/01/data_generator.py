@@ -26,19 +26,26 @@ class DataGenerator:
             
             x_batch = []
             for img_name in batch_images:
+                # print(img_name)
                 img_path = os.path.join('simple_image_classification\\trainval\\', img_name)
                 img = Image.open(img_path).convert('RGB')
                 img_as_array = np.array(img)
+                img_as_array = preprocess(img_as_array)
                 assert len(img_as_array.shape) == 3
                 assert img_as_array.shape[-1] == 3
+                img_as_array = np.rollaxis(img_as_array, 2, 0)
 
                 x_batch.append(img_as_array)
-            x_batch = np.array(x_batch)
-            yield x_batch, y_batch
+            x_batch = np.array(x_batch).astype(np.float32)
+            cur_ind += len(batch_images)
+
+            yield torch.from_numpy(x_batch), torch.from_numpy(y_batch)
 
         # мешаем данные каждую эпоху
         ind = np.random.permutation(len(self.__image_names))
         self.__image_names = self.__image_names[ind]
         self.__labels = self.__labels[ind]
-        
-        
+
+# mobile_net
+def preprocess(img_as_array):
+    return (img_as_array - 127.5) / 127.5

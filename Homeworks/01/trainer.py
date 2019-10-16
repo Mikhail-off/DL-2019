@@ -2,7 +2,6 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
-from IPython.display import clear_output
 
 class ModelTrainer:
     def __init__(self, train_generator, test_generator):
@@ -43,7 +42,7 @@ class ModelTrainer:
         return loss_log, acc_log, steps
         
 
-    def train(self, n_epochs, batch_size=32, lr=1e-3, cuda=True, plot_history=None):
+    def train(self, n_epochs, batch_size=32, lr=1e-3, cuda=True, plot_history=None, clear_output=None):
         assert self.__model is not None
     
         model = self.__model

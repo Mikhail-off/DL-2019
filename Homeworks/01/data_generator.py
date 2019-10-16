@@ -28,12 +28,7 @@ class DataGenerator:
             for img_name in batch_images:
                 # print(img_name)
                 img_path = os.path.join('simple_image_classification\\trainval\\', img_name)
-                img = Image.open(img_path).convert('RGB')
-                img_as_array = np.array(img)
-                img_as_array = preprocess(img_as_array)
-                assert len(img_as_array.shape) == 3
-                assert img_as_array.shape[-1] == 3
-                img_as_array = np.rollaxis(img_as_array, 2, 0)
+                img_as_array = open_image(img_path)
 
                 x_batch.append(img_as_array)
             x_batch = np.array(x_batch).astype(np.float32)
@@ -46,6 +41,15 @@ class DataGenerator:
         self.__image_names = self.__image_names[ind]
         self.__labels = self.__labels[ind]
 
+def open_image(image_path):
+    img = Image.open(image_path).convert('RGB')
+    img_as_array = np.array(img)
+    img_as_array = preprocess(img_as_array)
+    assert len(img_as_array.shape) == 3
+    assert img_as_array.shape[-1] == 3
+    img_as_array = np.rollaxis(img_as_array, 2, 0)
+    return img_as_array
+
 # mobile_net
 def preprocess(img_as_array):
-    return (img_as_array - 127.5) / 127.5
+    return ((img_as_array - 127.5) / 127.5).astype(np.float32)

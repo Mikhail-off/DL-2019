@@ -22,7 +22,7 @@ INPUT_SIZE = 224 * 224 * 3
 IMAGE_SIZE = (224, 224)
 CHANNELS = 3
 NUM_CLASSES = 200
-EPOCHS = 1
+EPOCHS = 25
 MAX_LEN = 10**5
 
 def build_final_model():

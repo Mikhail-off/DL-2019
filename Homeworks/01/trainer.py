@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
+from time import time
 
 class ModelTrainer:
     def __init__(self, train_generator, test_generator):
@@ -38,24 +39,31 @@ class ModelTrainer:
             optimizer.step()
             loss = loss.item()
             loss_log.append(loss)
+            
             steps += 1
+            print('Step {0}'.format(steps), flush=True, end='\r')
+
         return loss_log, acc_log, steps
         
 
     def train(self, n_epochs, batch_size=32, lr=1e-3, cuda=True, plot_history=None, clear_output=None):
         assert self.__model is not None
     
-        model = self.__model
         if cuda:
-            model.cuda()
+            self.__model = self.__model.cuda()
+        else:
+            self.__model = self.__model.cpu()
 
-        opt = opt = torch.optim.Adam(model.parameters(), lr=lr)
+        model = self.__model
+        opt = torch.optim.AdamW(model.parameters(), lr=lr)
 
         train_log, train_acc_log = [], []
         val_log, val_acc_log = [], []
 
+        best_val_score = 0.
 
         for epoch in range(n_epochs):
+            epoch_begin = time()
             print("Epoch {0} of {1}".format(epoch, n_epochs))
             train_loss, train_acc, steps = self.train_epoch(opt, batch_size=batch_size, cuda=cuda)
 
@@ -66,14 +74,21 @@ class ModelTrainer:
 
             val_log.append((steps * (epoch + 1), np.mean(val_loss)))
             val_acc_log.append((steps * (epoch + 1), np.mean(val_acc)))
+
+            if np.mean(val_acc) > best_val_score:
+                best_val_score = np.mean(val_acc)
+                torch.save(model, 'models/model_best.mdl')
             
             if plot_history is not None:
                 clear_output()
                 plot_history(train_log, val_log)
                 plot_history(train_acc_log, val_acc_log, title='accuracy')   
-            
+            epoch_end = time()
+            epoch_time = epoch_end - epoch_begin
             print("Epoch: {2}, val loss: {0}, val accuracy: {1}".format(np.mean(val_loss), np.mean(val_acc), epoch))
-        model.cpu()
+            print("Epoch: {2}, train loss: {0}, train accuracy: {1}".format(np.mean(train_loss), np.mean(train_acc), epoch))
+            print('Epoch time: {0}'.format(epoch_time))
+        self.__model = model.cpu()
 
     def test(self, cuda=True):
         assert self.__model is not None

@@ -6,3 +6,7 @@
 */*/simple_image_classification
 */*/.*
 */*/models
+*/*/*.pth
+*/*/MNIST
+*/*/*.mdl
+*/*/*.csv

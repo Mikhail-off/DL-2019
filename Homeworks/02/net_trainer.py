@@ -34,11 +34,12 @@ class ModelTrainer:
             data = x_batch.cuda() if cuda else x_batch
             target = y_batch.cuda() if cuda else y_batch
 
-            target_true = data[:, :-1]
-            target_input = data[:, 1:]
+            target_true = target[:, :-1]
+            target_input = target[:, 1:]
 
             optimizer.zero_grad()
             output = model.forward_train(data, target_input)
+
             pred = torch.max(output, 1)[1].cpu()
             acc = torch.eq(pred, target_true.cpu()).float().mean()
             acc_log.append(acc)
@@ -102,7 +103,7 @@ class ModelTrainer:
     def test(self, cuda=True):
         assert self.__model is not None
 
-        model = self.__model
+        model = self.__model.cuda() if cuda else self.__model
 
         loss_log, acc_log = [], []
         model.eval()
@@ -111,8 +112,8 @@ class ModelTrainer:
             data = x_batch.cuda() if cuda else x_batch
             target = y_batch.cuda() if cuda else y_batch
 
-            output = model(data)
-            loss = F.nll_loss(output, target).cpu()
+            output = model.forward_test(data)
+            loss = F.cross_entropy(output, target).cpu()
 
             pred = torch.max(output, 1)[1].cpu()
             acc = torch.eq(pred, y_batch).float().mean()
@@ -191,7 +192,7 @@ class TranslationModel(nn.Module):
 
         self.clf = nn.Linear(hidden_size, output_vocab_size)
         init.normal_(self.clf.weight, 0.0, 0.2)
-        self.softmax = nn.Softmax()
+        self.softmax = nn.Softmax(dim=-1)
 
     def _forward_encoder(self, x):
         batch_size = x.shape[0]
@@ -218,25 +219,50 @@ class TranslationModel(nn.Module):
 
         return torch.cat(H, dim=2)
 
-    def _forward_decoder(self, x, hidden_h, hidden_c):
+    def _forward_decoder_test(self, x, hidden_h, hidden_c):
         current_y = start_idx
-        result = [current_y]
-        limit = 0
-        while current_y != end_idx and limit < SEQ_LIMIT:
+        result = []
+        for i in range(x.shape[1]):
             inp = torch.tensor([current_y])
+            if self.is_cuda:
+                inp = inp.cuda()
             decoder_output, decoder_hidden = self.decoder(inp, (hidden_h, hidden_c))
             hidden_h, hidden_c = decoder_hidden
             h = self.clf(decoder_output.squeeze(1)).squeeze(0)
             y = self.softmax(h)
             _, current_y = torch.max(y, dim=0)
             current_y = current_y.item()
-            result.append(current_y)
+            result.append(y)
+        result = torch.stack(result).t().unsqueeze(0)
+        return result
+
+    def _forward_decoder(self, x, hidden_h, hidden_c):
+        current_y = start_idx
+        result = []
+        limit = 0
+        for i in range(x.shape[1]):
+        #while current_y != end_idx and limit < SEQ_LIMIT:
+            inp = torch.tensor([current_y])
+            if self.is_cuda:
+                inp = inp.cuda()
+            decoder_output, decoder_hidden = self.decoder(inp, (hidden_h, hidden_c))
+            hidden_h, hidden_c = decoder_hidden
+            h = self.clf(decoder_output.squeeze(1)).squeeze(0)
+            y = self.softmax(h)
+            _, current_y = torch.max(y, dim=0)
+            current_y = current_y.item()
+            result.append(y)
             limit += 1
+        result = torch.stack(result).t().unsqueeze(0)
         return result
 
     def forward_train(self, x, y):
         hidden_h, hidden_c = self._forward_encoder(x)
         return self._forward_decoder_train(x, y, hidden_h, hidden_c)
+
+    def forward_test(self, x):
+        hidden_h, hidden_c = self._forward_encoder(x)
+        return self._forward_decoder_test(x, hidden_h, hidden_c)
 
     def forward(self, x):
         hidden_h, hidden_c = self._forward_encoder(x)

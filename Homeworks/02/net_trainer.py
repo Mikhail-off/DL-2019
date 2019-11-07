@@ -22,7 +22,7 @@ class ModelTrainer:
     def get_model(self):
         return self.__model
 
-    def train_epoch(self, optimizer, cuda=True):
+    def train_epoch(self, optimizer, is_force=False, cuda=True):
         assert self.__model is not None
 
         model = self.__model
@@ -39,7 +39,7 @@ class ModelTrainer:
             target_input = target[:, 1:]
 
             optimizer.zero_grad()
-            output = model.forward_train(data, target_input)
+            output = model.forward_train(data, target_input, is_force=is_force)
 
             pred = torch.max(output, 1)[1].cpu()
             acc = torch.eq(pred, target_true.cpu()).float().mean()
@@ -56,7 +56,7 @@ class ModelTrainer:
 
         return loss_log, acc_log, steps
 
-    def train(self, n_epochs, batch_size=32, lr=1e-3, cuda=True, plot_history=None, clear_output=None):
+    def train(self, n_epochs, lr=1e-3, is_force=False, cuda=True, plot_history=None, clear_output=None):
         assert self.__model is not None
 
         if cuda:
@@ -75,7 +75,7 @@ class ModelTrainer:
         for epoch in range(n_epochs):
             epoch_begin = time()
             print("Epoch {0} of {1}".format(epoch, n_epochs))
-            train_loss, train_acc, steps = self.train_epoch(opt, cuda=cuda)
+            train_loss, train_acc, steps = self.train_epoch(opt, cuda=cuda, is_force=is_force)
 
             val_loss, val_acc = self.test(cuda=cuda)
 
@@ -262,9 +262,9 @@ class TranslationModel(nn.Module):
         result = torch.stack(result).unsqueeze(0)
         return result
 
-    def forward_train(self, x, y):
+    def forward_train(self, x, y, is_force=False):
         hidden_h, hidden_c = self._forward_encoder(x)
-        return self._forward_decoder_train(x, y, hidden_h, hidden_c)
+        return self._forward_decoder_train(x, y, hidden_h, hidden_c, is_force=is_force)
 
     def forward_test(self, x):
         hidden_h, hidden_c = self._forward_encoder(x)

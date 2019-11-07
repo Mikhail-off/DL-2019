@@ -16,7 +16,7 @@ unknown_idx = 3
 standart_tokens = [padding_token, start_token, end_token, unknown_token]
 
 puncts = [',','.', '!', '?', ':']
-min_word_count = 5
+min_word_count = 30
 
 class VocabularyProcessor:
     def __init__(self, file_name):

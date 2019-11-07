@@ -207,7 +207,7 @@ class TranslationModel(nn.Module):
                                                                           self.hidden_size).permute(1, 0, 2)
         self.decoder_hidden_c = encoder_hidden_c.permute(1, 0, 2).reshape(batch_size, self.n_layers,
                                                                           self.hidden_size).permute(1, 0, 2)
-        return self.decoder_hidden_h, self.decoder_hidden_c
+        return self.decoder_hidden_h.contiguous(), self.decoder_hidden_c.contiguous()
 
     def _forward_decoder_train(self, x, y, hidden_h, hidden_c, is_force=False):
         H = []
@@ -217,7 +217,7 @@ class TranslationModel(nn.Module):
             current_y = current_y.cuda()
         for i in range(y.shape[1]):
             inp = y[:, i] if is_force else current_y
-            decoder_output, decoder_hidden = self.decoder(inp, (hidden_h, hidden_c))
+            decoder_output, decoder_hidden = self.decoder(current_y, (hidden_h, hidden_c))
             hidden_h, hidden_c = decoder_hidden
             h = self.clf(decoder_output.squeeze(1))
             y_pred = self.softmax(h)

@@ -2,7 +2,7 @@ from collections import Counter
 import torch
 import numpy as np
 
-MAX_SENTENCES = 500
+MAX_SENTENCES = 5000
 
 padding_token = '<pad>'
 start_token = '<start>'

@@ -4,10 +4,11 @@ import torch.nn.functional as F
 import numpy as np
 from time import time
 import torch.nn.init as init
+from tqdm import tqdm
 
 from data_generator import start_idx, end_idx
 
-SEQ_LIMIT = 100
+SEQ_LIMIT = 20
 
 class ModelTrainer:
     def __init__(self, train_generator, test_generator):
@@ -29,8 +30,8 @@ class ModelTrainer:
         loss_log, acc_log = [], []
         model.train()
         steps = 0
-        for batch_num, (x_batch, y_batch) in enumerate(
-                self.__train_generator.get_epoch_generator()):
+        for batch_num, (x_batch, y_batch) in tqdm(enumerate(
+                self.__train_generator.get_epoch_generator()), total=self.__train_generator.generator_steps):
             data = x_batch.cuda() if cuda else x_batch
             target = y_batch.cuda() if cuda else y_batch
 
@@ -51,7 +52,7 @@ class ModelTrainer:
             loss_log.append(loss)
 
             steps += 1
-            print('Step {0}/{1}'.format(steps, self.__train_generator.generator_steps), flush=True, end='\r')
+            #print('Step {0}/{1}'.format(steps, self.__train_generator.generator_steps), flush=True, end='\r')
 
         return loss_log, acc_log, steps
 
@@ -208,13 +209,19 @@ class TranslationModel(nn.Module):
                                                                           self.hidden_size).permute(1, 0, 2)
         return self.decoder_hidden_h, self.decoder_hidden_c
 
-    def _forward_decoder_train(self, x, y, hidden_h, hidden_c):
+    def _forward_decoder_train(self, x, y, hidden_h, hidden_c, is_force=False):
         H = []
+
+        current_y = torch.tensor([start_idx]*y.shape[0], dtype=torch.long)
+        if self.is_cuda:
+            current_y = current_y.cuda()
         for i in range(y.shape[1]):
-            inp = y[:, i]
+            inp = y[:, i] if is_force else current_y
             decoder_output, decoder_hidden = self.decoder(inp, (hidden_h, hidden_c))
             hidden_h, hidden_c = decoder_hidden
             h = self.clf(decoder_output.squeeze(1))
+            y_pred = self.softmax(h)
+            _, current_y = torch.max(y_pred, dim=-1)
             H.append(h.unsqueeze(2))
 
         return torch.cat(H, dim=2)
@@ -230,7 +237,7 @@ class TranslationModel(nn.Module):
             hidden_h, hidden_c = decoder_hidden
             h = self.clf(decoder_output.squeeze(1)).squeeze(0)
             y = self.softmax(h)
-            _, current_y = torch.max(y, dim=0)
+            _, current_y = torch.max(y, dim=-1)
             current_y = current_y.item()
             result.append(y)
         result = torch.stack(result).t().unsqueeze(0)
@@ -240,8 +247,7 @@ class TranslationModel(nn.Module):
         current_y = start_idx
         result = []
         limit = 0
-        for i in range(x.shape[1]):
-        #while current_y != end_idx and limit < SEQ_LIMIT:
+        while current_y != end_idx and limit < SEQ_LIMIT:
             inp = torch.tensor([current_y])
             if self.is_cuda:
                 inp = inp.cuda()
@@ -249,11 +255,11 @@ class TranslationModel(nn.Module):
             hidden_h, hidden_c = decoder_hidden
             h = self.clf(decoder_output.squeeze(1)).squeeze(0)
             y = self.softmax(h)
-            _, current_y = torch.max(y, dim=0)
+            _, current_y = torch.max(y, dim=-1)
             current_y = current_y.item()
             result.append(y)
             limit += 1
-        result = torch.stack(result).t().unsqueeze(0)
+        result = torch.stack(result).unsqueeze(0)
         return result
 
     def forward_train(self, x, y):

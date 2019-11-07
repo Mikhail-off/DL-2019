@@ -2,6 +2,7 @@ import os
 from data_generator import DataGenerator
 from net_trainer import TranslationModel, ModelTrainer
 import torch
+from tqdm import tqdm
 
 DATA_DIR = 'homework_machine_translation_de-en/'
 MODELS_DIR = 'models/'
@@ -15,33 +16,36 @@ VALIDATION_FILE_DE = os.path.join(DATA_DIR, VALIDATION_FILE + '.de')
 VALIDATION_FILE_EN = os.path.join(DATA_DIR, VALIDATION_FILE + '.en')
 
 TEST_FILE_DE = os.path.join(DATA_DIR, 'test1.de-en.de')
+TEST_FILE_EN = os.path.join(DATA_DIR, 'test1.de-en.en')
 
-
-HIDDEN_SIZE = 160
-BATCH_SIZE = 4
+HIDDEN_SIZE = 256
+BATCH_SIZE = 128
 SEQUENCE_LEN = 16
-N_LAYERS = 1
+N_LAYERS = 2
+LEARNING_RATE = 0.01
 
-IS_CUDA = False
+IS_CUDA = True
 
 def predict(filename, model, index2word, sent2matrix):
-    with open(filename, 'r', encoding='utf-8') as f:
-        for line in f:
-            sent = line.split()
-            vecotorized = sent2matrix(sent).unsqueeze(0)
-            if model.is_cuda:
-                model = model.cuda()
-                vecotorized = vecotorized.cuda()
-            output = model(vecotorized)[0].cpu()
-            _, pred = torch.max(output, dim=0)
-            translation = []
-            for ind in pred:
-                index = int(ind)
-                translation.append(index2word[index])
-            for word, word_tr in zip(sent, translation):
-                print(word, word_tr)
-            print('-------------------------')
+    f_in = open(filename, 'r', encoding='utf-8')
+    f_out = open(TEST_FILE_EN, 'w', encoding='utf-8', buffering=512)
+    for line in tqdm(f_in):
+        sent = line.split()
+        vecotorized = sent2matrix(sent).unsqueeze(0)
+        if model.is_cuda:
+            model = model.cuda()
+            vecotorized = vecotorized.cuda()
+        output = model(vecotorized)[0].cpu()
+        _, pred = torch.max(output, dim=-1)
+        translation = []
+        for ind in pred:
+            index = int(ind)
+            translation.append(index2word[index])
+        translation_str = ' '.join(translation) + '\n'
+        f_out.write(translation_str)
     model = model.cpu()
+    f_in.close()
+    f_out.close()
 
 def main():
     train_generator = DataGenerator(TRAIN_FILE_DE, TRAIN_FILE_EN, BATCH_SIZE, SEQUENCE_LEN)
@@ -52,7 +56,7 @@ def main():
     model = TranslationModel(len(train_generator.data.word2index), len(train_generator.target.word2index), HIDDEN_SIZE,
                              N_LAYERS, is_cuda=IS_CUDA)
     trainer.set_model(model)
-    trainer.train(n_epochs=10, cuda=IS_CUDA)
+    trainer.train(n_epochs=10, cuda=IS_CUDA, lr=LEARNING_RATE)
     predict(TRAIN_FILE_DE, model, train_generator.target.index2word,  train_generator.data.sentence2vector)
 
 if __name__ == '__main__':

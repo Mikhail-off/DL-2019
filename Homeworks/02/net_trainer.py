@@ -10,6 +10,7 @@ from data_generator import start_idx, end_idx
 
 SEQ_LIMIT = 20
 
+
 class ModelTrainer:
     def __init__(self, train_generator, test_generator):
         self.__model = None
@@ -41,8 +42,8 @@ class ModelTrainer:
             optimizer.zero_grad()
             output = model.forward_train(data, target_input, is_force=is_force)
 
-            pred = torch.max(output, 1)[1].cpu()
-            acc = torch.eq(pred, target_true.cpu()).float().mean()
+            pred = torch.max(output, 1)[1]
+            acc = torch.eq(pred, target_true).cpu().float().mean()
             acc_log.append(acc)
 
             loss = F.cross_entropy(output, target_true).cpu()
@@ -52,7 +53,7 @@ class ModelTrainer:
             loss_log.append(loss)
 
             steps += 1
-            #print('Step {0}/{1}'.format(steps, self.__train_generator.generator_steps), flush=True, end='\r')
+            # print('Step {0}/{1}'.format(steps, self.__train_generator.generator_steps), flush=True, end='\r')
 
         return loss_log, acc_log, steps
 
@@ -109,15 +110,18 @@ class ModelTrainer:
         loss_log, acc_log = [], []
         model.eval()
 
-        for batch_num, (x_batch, y_batch) in enumerate(self.__test_generator.get_epoch_generator()):
+        for batch_num, (x_batch, y_batch) in tqdm(enumerate(self.__test_generator.get_epoch_generator()),
+                                                  total=self.__test_generator.generator_steps):
             data = x_batch.cuda() if cuda else x_batch
             target = y_batch.cuda() if cuda else y_batch
 
-            output = model.forward_test(data)
-            loss = F.cross_entropy(output, target).cpu()
+            target_true = target[:, :-1]
 
-            pred = torch.max(output, 1)[1].cpu()
-            acc = torch.eq(pred, y_batch).float().mean()
+            output = model.forward_test(data)
+            loss = F.cross_entropy(output, target_true).cpu()
+
+            pred = torch.max(output, 1)[1]
+            acc = torch.eq(pred, target_true).cpu().float().mean()
             acc_log.append(acc)
 
             loss = loss.item()
@@ -212,10 +216,10 @@ class TranslationModel(nn.Module):
     def _forward_decoder_train(self, x, y, hidden_h, hidden_c, is_force=False):
         H = []
 
-        current_y = torch.tensor([start_idx]*y.shape[0], dtype=torch.long)
+        current_y = torch.tensor([start_idx] * x.shape[0], dtype=torch.long)
         if self.is_cuda:
             current_y = current_y.cuda()
-        for i in range(y.shape[1]):
+        for i in range(x.shape[1] - 1):
             inp = y[:, i] if is_force else current_y
             decoder_output, decoder_hidden = self.decoder(current_y, (hidden_h, hidden_c))
             hidden_h, hidden_c = decoder_hidden
@@ -227,21 +231,7 @@ class TranslationModel(nn.Module):
         return torch.cat(H, dim=2)
 
     def _forward_decoder_test(self, x, hidden_h, hidden_c):
-        current_y = start_idx
-        result = []
-        for i in range(x.shape[1]):
-            inp = torch.tensor([current_y])
-            if self.is_cuda:
-                inp = inp.cuda()
-            decoder_output, decoder_hidden = self.decoder(inp, (hidden_h, hidden_c))
-            hidden_h, hidden_c = decoder_hidden
-            h = self.clf(decoder_output.squeeze(1)).squeeze(0)
-            y = self.softmax(h)
-            _, current_y = torch.max(y, dim=-1)
-            current_y = current_y.item()
-            result.append(y)
-        result = torch.stack(result).t().unsqueeze(0)
-        return result
+        return self._forward_decoder_train(x, None, hidden_h, hidden_c)
 
     def _forward_decoder(self, x, hidden_h, hidden_c):
         current_y = start_idx

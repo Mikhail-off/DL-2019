@@ -2,7 +2,7 @@ from collections import Counter
 import torch
 import numpy as np
 
-MAX_SENTENCES = 5000
+MAX_SENTENCES = -1
 
 padding_token = '<pad>'
 start_token = '<start>'
@@ -16,7 +16,7 @@ unknown_idx = 3
 standart_tokens = [padding_token, start_token, end_token, unknown_token]
 
 puncts = [',','.', '!', '?', ':']
-min_word_count = 30
+min_word_count = 10
 
 class VocabularyProcessor:
     def __init__(self, file_name):
@@ -118,14 +118,16 @@ class DataGenerator:
         seq_len = self._seq_len
 
         for i in range(0, len(self.data.sentences), batch_size):
-            if i + batch_size >= len(self.data.sentences):
+            start = i
+            end = i + batch_size if i + batch_size <= len(self.data.sentences) else len(self.data.sentences)
+            if start >= len(self.data.sentences):
                 return
 
-            x_data = torch.zeros(batch_size, seq_len, dtype=torch.long)
-            y_data = torch.zeros(batch_size, seq_len, dtype=torch.long)
+            x_data = torch.zeros(end - start, seq_len, dtype=torch.long)
+            y_data = torch.zeros(end - start, seq_len, dtype=torch.long)
 
-            for ind, (x_sent, y_sent) in enumerate(zip(self.data.sentences[i: i + batch_size],
-                                                       self.target.sentences[i: i + batch_size])):
+            for ind, (x_sent, y_sent) in enumerate(zip(self.data.sentences[start: end],
+                                                       self.target.sentences[start: end])):
                 x_data[ind] = self.data.sentence2vector(x_sent, seq_len)
                 y_data[ind] = self.target.sentence2vector(y_sent, seq_len)
 

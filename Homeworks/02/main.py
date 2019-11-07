@@ -20,18 +20,18 @@ VALIDATION_FILE_EN = os.path.join(DATA_DIR, VALIDATION_FILE + '.en')
 TEST_FILE_DE = os.path.join(DATA_DIR, 'test1.de-en.de')
 TEST_FILE_EN = os.path.join(DATA_DIR, 'test1.de-en.en')
 
-N_EPOCH = 5
-HIDDEN_SIZE = 512
+N_EPOCH = 100
+HIDDEN_SIZE = 1024
 BATCH_SIZE = 128
-SEQUENCE_LEN = 32
-N_LAYERS = 4
+SEQUENCE_LEN = 16
+N_LAYERS = 2
 LEARNING_RATE = 0.001
 
 IS_CUDA = True
 
 def predict(filename, target_filename, model, index2word, sent2matrix):
     f_in = open(filename, 'r', encoding='utf-8')
-    f_out = open(target_filename, 'w', encoding='utf-8', buffering=512)
+    f_out = open(target_filename, 'w', encoding='utf-8', buffering=4096)
     for line in tqdm(f_in):
         sent = line.split()
         vecotorized = sent2matrix(sent).unsqueeze(0)
@@ -52,7 +52,7 @@ def predict(filename, target_filename, model, index2word, sent2matrix):
 
 def main():
     train_generator = DataGenerator(TRAIN_FILE_DE, TRAIN_FILE_EN, BATCH_SIZE, SEQUENCE_LEN)
-    valid_generator = DataGenerator(VALIDATION_FILE_DE, VALIDATION_FILE_EN, 1, SEQUENCE_LEN,
+    valid_generator = DataGenerator(VALIDATION_FILE_DE, VALIDATION_FILE_EN, BATCH_SIZE, SEQUENCE_LEN,
                                     train_generator.data, train_generator.target)
 
     trainer = ModelTrainer(train_generator, valid_generator)

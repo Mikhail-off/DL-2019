@@ -8,7 +8,7 @@ from tqdm import tqdm
 
 from data_generator import start_idx, end_idx
 
-SEQ_LIMIT = 20
+SEQ_LIMIT = 100
 
 
 class ModelTrainer:
@@ -31,8 +31,9 @@ class ModelTrainer:
         loss_log, acc_log = [], []
         model.train()
         steps = 0
-        for batch_num, (x_batch, y_batch) in tqdm(enumerate(
-                self.__train_generator.get_epoch_generator()), total=self.__train_generator.generator_steps):
+        bar = tqdm(enumerate(
+            self.__train_generator.get_epoch_generator()), total=self.__train_generator.generator_steps)
+        for batch_num, (x_batch, y_batch) in bar:
             data = x_batch.cuda() if cuda else x_batch
             target = y_batch.cuda() if cuda else y_batch
 
@@ -53,6 +54,8 @@ class ModelTrainer:
             loss_log.append(loss)
 
             steps += 1
+            bar.set_description_str("Cur BatchSize = %d, Train loss = %lf, accuracy = %lf" % (
+                x_batch.shape[0], loss, acc))
             # print('Step {0}/{1}'.format(steps, self.__train_generator.generator_steps), flush=True, end='\r')
 
         return loss_log, acc_log, steps
@@ -66,7 +69,7 @@ class ModelTrainer:
             self.__model = self.__model.cpu()
 
         model = self.__model
-        opt = torch.optim.Adam(model.parameters(), lr=lr)
+        opt = torch.optim.AdamW(model.parameters(), lr=lr)
 
         train_log, train_acc_log = [], []
         val_log, val_acc_log = [], []
@@ -74,6 +77,8 @@ class ModelTrainer:
         best_val_score = 0.
 
         for epoch in range(n_epochs):
+            if epoch % 2 == 0 and epoch != 0:
+                lr = lr / 2
             epoch_begin = time()
             print("Epoch {0} of {1}".format(epoch, n_epochs))
             train_loss, train_acc, steps = self.train_epoch(opt, cuda=cuda, is_force=is_force)
@@ -109,9 +114,9 @@ class ModelTrainer:
 
         loss_log, acc_log = [], []
         model.eval()
-
-        for batch_num, (x_batch, y_batch) in tqdm(enumerate(self.__test_generator.get_epoch_generator()),
-                                                  total=self.__test_generator.generator_steps):
+        bar = tqdm(enumerate(self.__test_generator.get_epoch_generator()),
+                                                  total=self.__test_generator.generator_steps)
+        for batch_num, (x_batch, y_batch) in bar:
             data = x_batch.cuda() if cuda else x_batch
             target = y_batch.cuda() if cuda else y_batch
 
@@ -126,7 +131,7 @@ class ModelTrainer:
 
             loss = loss.item()
             loss_log.append(loss)
-
+            bar.set_description_str("Val loss = %lf, accuracy = %lf" % (loss, acc))
         return loss_log, acc_log
 
 

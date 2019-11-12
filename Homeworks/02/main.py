@@ -20,12 +20,12 @@ VALIDATION_FILE_EN = os.path.join(DATA_DIR, VALIDATION_FILE + '.en')
 TEST_FILE_DE = os.path.join(DATA_DIR, 'test1.de-en.de')
 TEST_FILE_EN = os.path.join(DATA_DIR, 'test1.de-en.en')
 
-N_EPOCH = 100
-HIDDEN_SIZE = 1024
+N_EPOCH = 50
+HIDDEN_SIZE = 128
 BATCH_SIZE = 128
-SEQUENCE_LEN = 16
+SEQUENCE_LEN = 64
 N_LAYERS = 2
-LEARNING_RATE = 0.001
+LEARNING_RATE = 0.0001
 
 IS_CUDA = True
 
@@ -64,8 +64,10 @@ def main():
     trainer.set_model(model)
     trainer.train(n_epochs=N_EPOCH, cuda=IS_CUDA, lr=LEARNING_RATE, is_force=False)
 
-    predict(VALIDATION_FILE_DE, VALIDATION_FILE_EN + '.txt', model, train_generator.target.index2word,
-            train_generator.data.sentence2vector)
+    #predict(TRAIN_FILE_DE, TRAIN_FILE_EN + '.txt', model, train_generator.target.index2word,
+    #        train_generator.data.sentence2vector)
+    #predict(VALIDATION_FILE_DE, VALIDATION_FILE_EN + '.txt', model, train_generator.target.index2word,
+    #        train_generator.data.sentence2vector)
     predict(TEST_FILE_DE, TEST_FILE_EN, model, train_generator.target.index2word,  train_generator.data.sentence2vector)
 
 if __name__ == '__main__':

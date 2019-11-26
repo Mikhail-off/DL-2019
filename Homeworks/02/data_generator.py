@@ -16,7 +16,7 @@ unknown_idx = 3
 standart_tokens = [padding_token, start_token, end_token, unknown_token]
 
 puncts = [',','.', '!', '?', ':']
-min_word_count = 5
+min_word_count = 2
 
 class VocabularyProcessor:
     def __init__(self, file_name):
@@ -82,7 +82,7 @@ class VocabularyProcessor:
                 vector[i + 1] = self.word2index[word]
             else:
                 vector[i + 1] = self.word2index[unknown_token]
-        vector[seq_size - 1] = self.word2index[end_token]
+        vector[min(seq_size - 1, len(sentence))] = self.word2index[end_token]
         return vector
 
     def vector2sentence(self, vector):
@@ -115,18 +115,40 @@ class DataGenerator:
     def get_epoch_generator(self):
 
         batch_size = self._batch_size
-        seq_len = self._seq_len
+        lens = np.array(list(map(len, self.data.sentences)))
+        ind = np.argsort(lens)[::-1]
+        lens = lens[ind]
+        self.data.sentences = self.data.sentences[ind]
+        self.target.sentences = self.target.sentences[ind]
+        i = 0
+        while i < len(self.data.sentences):
+            start = i
+            if start >= len(self.data.sentences):
+                break
+            end = i + batch_size if i + batch_size <= len(self.data.sentences) else len(self.data.sentences)
 
-        for i in range(0, len(self.data.sentences), batch_size):
-            if i + batch_size >= len(self.data.sentences):
-                return
+            for temp_end in range(end - 1, start - 1, -1):
+                if np.abs(lens[temp_end] - lens[start]) <= 2:
+                    end = temp_end + 1
+                    break
 
-            x_data = torch.zeros(batch_size, seq_len, dtype=torch.long)
-            y_data = torch.zeros(batch_size, seq_len, dtype=torch.long)
 
-            for ind, (x_sent, y_sent) in enumerate(zip(self.data.sentences[i: i + batch_size],
-                                                       self.target.sentences[i: i + batch_size])):
+            i += end - start
+            seq_len = self._seq_len
+            x_batch = self.data.sentences[start: end]
+            y_batch = self.target.sentences[start: end]
+            max_x_len = max(map(len, x_batch))
+            max_y_len = max(map(len, y_batch))
+            seq_len = min(seq_len, max(max_x_len, max_y_len))
+
+            x_data = torch.zeros(end - start, seq_len, dtype=torch.long)
+            y_data = torch.zeros(end - start, seq_len, dtype=torch.long)
+            #print(lens[start:end])
+            for ind, (x_sent, y_sent) in enumerate(zip(x_batch, y_batch)):
                 x_data[ind] = self.data.sentence2vector(x_sent, seq_len)
                 y_data[ind] = self.target.sentence2vector(y_sent, seq_len)
 
             yield x_data, y_data
+        ind = np.random.permutation(len(self.data.sentences))
+        self.data.sentences = self.data.sentences[ind]
+        self.target.sentences = self.target.sentences[ind]

@@ -21,7 +21,7 @@ TEST_FILE_EN = os.path.join(DATA_DIR, 'test1.de-en.en')
 HIDDEN_SIZE = 256
 BATCH_SIZE = 128
 SEQUENCE_LEN = 16
-N_LAYERS = 2
+N_LAYERS = 1
 LEARNING_RATE = 0.01
 
 IS_CUDA = True
@@ -57,7 +57,7 @@ def main():
                              N_LAYERS, is_cuda=IS_CUDA)
     trainer.set_model(model)
     trainer.train(n_epochs=10, cuda=IS_CUDA, lr=LEARNING_RATE)
-    predict(TRAIN_FILE_DE, model, train_generator.target.index2word,  train_generator.data.sentence2vector)
+    predict(TEST_FILE_DE, model, train_generator.target.index2word,  train_generator.data.sentence2vector)
 
 if __name__ == '__main__':
     main()

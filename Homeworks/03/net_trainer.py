@@ -12,11 +12,13 @@ class ModelTrainer:
     IMAGE_LOGS = 'images/'
     MODEL_LOGS = 'models/'
 
-    def __init__(self, generator, discriminator, l1_weight, bce_weight, load_from_best=False):
+    def __init__(self, generator, discriminator, l1_weight, bce_weight, load_from_best=False,
+                 D_learn_prob=0.5):
         self.generator = torch.load(self.BEST_GENERATOR) if load_from_best else generator
         self.discriminator = torch.load(self.BEST_DISCRIMINATOR) if load_from_best else discriminator
         self._l1_weight = l1_weight
         self._bce_weight = bce_weight
+        self._D_learn_prob = D_learn_prob
         os.makedirs(self.IMAGE_LOGS, exist_ok=True)
         os.makedirs(self.MODEL_LOGS, exist_ok=True)
 
@@ -29,7 +31,7 @@ class ModelTrainer:
             out_D_Fake = self.discriminator(x_batch, out_G)
             out_D_Real = self.discriminator(x_batch, y_batch)
 
-            if random() < 0.5:
+            if random() < self._D_learn_prob:
                 opt_D.zero_grad()
                 loss = loss_func_D(D_fake=out_D_Fake, D_real=out_D_Real)
                 loss.backward()

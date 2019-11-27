@@ -40,7 +40,8 @@ class DataGenerator:
     @staticmethod
     def deprocess_image(tensor):
         transform = transforms.Compose([transforms.ToPILImage('RGB')])
-        return transform(tensor)
+        image = transform(tensor)
+        return image
 
     @staticmethod
     def save_image(image_path, tensor):

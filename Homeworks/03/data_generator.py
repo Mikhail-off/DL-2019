@@ -33,12 +33,13 @@ class DataGenerator:
 
     def open_image(self, image_path):
         image = Image.open(image_path).convert('RGB')
-        transform = transforms.Compose([transforms.ToTensor()])
-        tensor = transform(image)
+        img_as_array = (np.array(image) - 127.5) / 127.5
+        tensor = torch.from_numpy(img_as_array)
         return tensor
 
     @staticmethod
     def deprocess_image(tensor):
+        tensor = tensor * 127.5 + 127.5
         transform = transforms.Compose([transforms.ToPILImage('RGB')])
         image = transform(tensor)
         return image

@@ -186,7 +186,10 @@ class UNetBlock(nn.Module):
         layers = []
 
         down_ch = 2 * in_ch if first_filters is None else first_filters
-        layers += conv_block(in_ch, down_ch, kernel_size, padding, stride=2, use_bn=True, bn_before=True)
+
+        layers += conv_block(in_ch, down_ch, kernel_size, padding, stride=2, use_bn=True, bn_before=False,
+                             activation=nn.ReLU())
+
         #print('Down in: %d\nDown out: %d' % (in_ch, down_ch))
         if sub_block is None:
             sub_block = conv_block(down_ch, 2 * down_ch, kernel_size, padding, stride=1, use_bn=True, bn_before=True)
@@ -196,7 +199,7 @@ class UNetBlock(nn.Module):
 
         output_ch = in_ch if last_filters is None else last_filters
         layers += conv_block(2 * down_ch, output_ch, kernel_size + 1, padding=1, stride=2, transpose=True,
-                             use_bn=True, bn_before=True)
+                             use_bn=True, bn_before=False, activation=nn.ReLU())
         self.model = nn.Sequential(*layers)
 
     def forward(self, x):

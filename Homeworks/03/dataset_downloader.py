@@ -1,10 +1,10 @@
-import zipfile
+import tarfile
 import os
 import urllib.request
 
-DATASETS_REPO = 'https://people.eecs.berkeley.edu/~taesung_park/CycleGAN/datasets/'
-ZIP_ARC_EXT = '.zip'
-TEMP_ARC_FILENAME = 'temp' + ZIP_ARC_EXT
+DATASETS_REPO = 'http://efrosgans.eecs.berkeley.edu/pix2pix/datasets/'
+ARC_EXT = '.tar.gz'
+TEMP_ARC_FILENAME = 'temp' + ARC_EXT
 
 class DatasetDownloader:
     def __init__(self, dataset_names, data_path):
@@ -18,10 +18,10 @@ class DatasetDownloader:
                 continue
 
             print('Downloading', dataset_name)
-            dataset_url = DATASETS_REPO + dataset_name + ZIP_ARC_EXT
+            dataset_url = DATASETS_REPO + dataset_name + ARC_EXT
             arc_file = os.path.join(self.data_path, TEMP_ARC_FILENAME)
             urllib.request.urlretrieve(dataset_url, arc_file)
-            with zipfile.ZipFile(arc_file, 'r') as arc:
+            with tarfile.open(arc_file, 'r:gz') as arc:
                 print('Extracting', dataset_name)
                 arc.extractall(self.data_path)
             os.remove(arc_file)

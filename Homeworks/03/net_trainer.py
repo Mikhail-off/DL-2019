@@ -169,7 +169,7 @@ class GeneratorP2P(nn.Module):
         cur_block = UNetBlock(in_ch=3, sub_block=cur_block, first_filters=cur_filters * 2, last_filters=cur_filters)
         self.model = nn.Sequential(
             cur_block,
-            *conv_block(cur_filters + 3, 3, 3, 1, stride=1, activation=nn.Tanh())
+            *conv_block(cur_filters + 3, 3, 3, 1, stride=1, activation=nn.Sigmoid(), use_bn=True, bn_before=True)
         )
         self.model.apply(init_func)
 
@@ -186,17 +186,17 @@ class UNetBlock(nn.Module):
         layers = []
 
         down_ch = 2 * in_ch if first_filters is None else first_filters
-        layers += conv_block(in_ch, down_ch, kernel_size, padding, stride=2, use_bn=True, bn_before=False)
+        layers += conv_block(in_ch, down_ch, kernel_size, padding, stride=2, use_bn=True, bn_before=True)
         #print('Down in: %d\nDown out: %d' % (in_ch, down_ch))
         if sub_block is None:
-            sub_block = conv_block(down_ch, 2 * down_ch, kernel_size, padding, stride=1)
+            sub_block = conv_block(down_ch, 2 * down_ch, kernel_size, padding, stride=1, use_bn=True, bn_before=True)
         else:
             sub_block = [sub_block]
         layers += sub_block
 
         output_ch = in_ch if last_filters is None else last_filters
         layers += conv_block(2 * down_ch, output_ch, kernel_size + 1, padding=1, stride=2, transpose=True,
-                             use_bn=True, bn_before=False)
+                             use_bn=True, bn_before=True)
         self.model = nn.Sequential(*layers)
 
     def forward(self, x):
@@ -208,21 +208,21 @@ class UNetBlock(nn.Module):
         return out_with_skip
 
 class DiscriminatorP2P(nn.Module):
-    def __init__(self, conv_blocks_count=8):
+    def __init__(self, conv_blocks_count=3):
         super().__init__()
         layers = []
         cur_inputs = 3 * 2
         cur_outputs = 0
-        filters = 32
+        filters = 64
         kernel_size = 3
         padding = kernel_size // 2
 
-        layers += conv_block(cur_inputs, filters, kernel_size, padding, stride=1, use_bn=True, bn_before=False)
+        layers += conv_block(cur_inputs, filters, kernel_size, padding, stride=1, use_bn=True, bn_before=True)
         cur_inputs = filters
         # stride convs
         for i in range(conv_blocks_count):
             cur_outputs = min(2**i, 8) * filters
-            layers += conv_block(cur_inputs, cur_outputs, kernel_size, padding, stride=2, use_bn=True, bn_before=False)
+            layers += conv_block(cur_inputs, cur_outputs, kernel_size, padding, stride=2, use_bn=True, bn_before=True)
             cur_inputs = cur_outputs
 
         layers += conv_block(cur_outputs, 1, 1, 0, stride=1, activation=nn.Sigmoid(), use_bn=True, bn_before=True)

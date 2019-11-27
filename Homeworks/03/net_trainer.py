@@ -7,15 +7,18 @@ from data_generator import DataGenerator
 from random import random
 
 class ModelTrainer:
-    BEST_MODEL = 'best_model.mdl'
+    BEST_GENERATOR = 'best_generator.mdl'
+    BEST_DISCRIMINATOR = 'best_discriminator.mdl'
     IMAGE_LOGS = 'images/'
+    MODEL_LOGS = 'models/'
 
-    def __init__(self, generator, discriminator, l1_weight, bce_weight):
-        self.generator = generator
-        self.discriminator = discriminator
+    def __init__(self, generator, discriminator, l1_weight, bce_weight, load_from_best=False):
+        self.generator = torch.load(self.BEST_GENERATOR) if load_from_best else generator
+        self.discriminator = torch.load(self.BEST_DISCRIMINATOR) if load_from_best else discriminator
         self._l1_weight = l1_weight
         self._bce_weight = bce_weight
         os.makedirs(self.IMAGE_LOGS, exist_ok=True)
+        os.makedirs(self.MODEL_LOGS, exist_ok=True)
 
     def train_epoch(self, opt_G, opt_D, train_data_gen, loss_func_G, loss_func_D, total_size):
         cur_processed = 0
@@ -42,7 +45,7 @@ class ModelTrainer:
             cur_processed += x_batch.shape[0]
             print('Image processed %d/%d. G-loss %f, D-loss %f' % (cur_processed, total_size,
                                                                    g_loss_log[-1], d_loss_log[-1]), end='\r')
-
+        print()
         return g_loss_log[1:], d_loss_log[1:]
 
     def test_model(self, valid_data_gen, loss_func_G, loss_func_D):
@@ -69,8 +72,7 @@ class ModelTrainer:
         g_loss_mean = np.mean(g_loss_log)
         d_loss_mean = np.mean(d_loss_log)
         l1_loss_mean = np.mean(l1_log)
-        print('Valid G-loss %f, D-loss %f, L1 %f' % (g_loss_mean, d_loss_mean, l1_loss_mean),
-              end='\r')
+        print('Valid G-loss %f, D-loss %f, L1 %f' % (g_loss_mean, d_loss_mean, l1_loss_mean))
 
         return g_loss_log, d_loss_log
 
@@ -99,8 +101,9 @@ class ModelTrainer:
         loss_D = DiscriminatorLoss(cuda=cuda)
         loss_G = GeneratorLoss(cuda=cuda, l1_weight=self._l1_weight, bce_weight=self._bce_weight)
 
+        best_G_loss = None
         for epoch in range(n_epochs):
-            print('Epoch %d/%d' % (epoch, n_epochs))
+            print('Epoch %d/%d\n' % (epoch, n_epochs))
             train_data_gen = train_data_epoch_gen.get_epoch_generator(batch_size=batch_size, cuda=cuda)
 
             logs = self.train_epoch(opt_G, opt_D, train_data_gen, loss_G, loss_D, len(train_data_epoch_gen))
@@ -108,6 +111,14 @@ class ModelTrainer:
             d_loss_log.extend(logs[1])
             self.test_model(valid_data_epoch_gen.get_epoch_generator(batch_size=batch_size, cuda=cuda),
                             loss_func_D=loss_D, loss_func_G=loss_G)
+            if best_G_loss is None or np.mean(logs[0]) < best_G_loss:
+                torch.save(self.generator, self.BEST_GENERATOR)
+                torch.save(self.discriminator, self.BEST_DISCRIMINATOR)
+
+            generator_model_name = 'generator_epoch%05d.mdl' % epoch
+            discriminator_model_name = 'discriminator_epoch%05d.mdl' % epoch
+            torch.save(self.generator, os.path.join(self.MODEL_LOGS, generator_model_name))
+            torch.save(self.discriminator, os.path.join(self.MODEL_LOGS, discriminator_model_name))
 
         self.sample_model(valid_data_epoch_gen.get_epoch_generator(batch_size=batch_size, cuda=cuda))
 
@@ -120,13 +131,16 @@ class Flatten(nn.Module):
         return x.view(x.size()[0], -1)
 
 
-def conv_block(in_ch, out_ch, kernel_size, padding, stride, activation=nn.LeakyReLU(0.2, True), transpose=False):
+def conv_block(in_ch, out_ch, kernel_size, padding, stride, activation=nn.LeakyReLU(0.2, True), transpose=False,
+               use_bn=False, bn_before=True):
     conv_layer = nn.ConvTranspose2d if transpose else nn.Conv2d
-    return [
-        conv_layer(in_ch, out_ch, kernel_size=kernel_size, padding=padding, stride=stride),
-        nn.BatchNorm2d(out_ch),
-        activation
-    ]
+    layers = [conv_layer(in_ch, out_ch, kernel_size=kernel_size, padding=padding, stride=stride)]
+    if use_bn and bn_before:
+        layers += [nn.BatchNorm2d(out_ch)]
+    layers += [activation]
+    if use_bn and not bn_before:
+        layers += [nn.BatchNorm2d(out_ch)]
+    return layers
 
 
 class GeneratorP2P(nn.Module):
@@ -155,7 +169,7 @@ class UNetBlock(nn.Module):
         layers = []
 
         down_ch = 2 * in_ch if first_filters is None else first_filters
-        layers += conv_block(in_ch, down_ch, kernel_size, padding, stride=2)
+        layers += conv_block(in_ch, down_ch, kernel_size, padding, stride=2, use_bn=True, bn_before=False)
         #print('Down in: %d\nDown out: %d' % (in_ch, down_ch))
         if sub_block is None:
             sub_block = conv_block(down_ch, 2 * down_ch, kernel_size, padding, stride=1)
@@ -164,7 +178,8 @@ class UNetBlock(nn.Module):
         layers += sub_block
 
         output_ch = in_ch if last_filters is None else last_filters
-        layers += conv_block(2 * down_ch, output_ch, kernel_size + 1, padding=1, stride=2, transpose=True)
+        layers += conv_block(2 * down_ch, output_ch, kernel_size + 1, padding=1, stride=2, transpose=True,
+                             use_bn=True, bn_before=False)
         self.model = nn.Sequential(*layers)
 
     def forward(self, x):
@@ -185,15 +200,15 @@ class DiscriminatorP2P(nn.Module):
         kernel_size = 3
         padding = kernel_size // 2
 
-        layers += conv_block(cur_inputs, filters, kernel_size, padding, stride=1)
+        layers += conv_block(cur_inputs, filters, kernel_size, padding, stride=1, use_bn=True, bn_before=False)
         cur_inputs = filters
         # stride convs
         for i in range(conv_blocks_count):
             cur_outputs = min(2**i, 8) * filters
-            layers += conv_block(cur_inputs, cur_outputs, kernel_size, padding, stride=2)
+            layers += conv_block(cur_inputs, cur_outputs, kernel_size, padding, stride=2, use_bn=True, bn_before=False)
             cur_inputs = cur_outputs
 
-        layers += conv_block(cur_outputs, 1, 1, 0, stride=1, activation=nn.Sigmoid())
+        layers += conv_block(cur_outputs, 1, 1, 0, stride=1, activation=nn.Sigmoid(), use_bn=True, bn_before=True)
         self.model = nn.Sequential(*layers)
         #self.layers = layers
 

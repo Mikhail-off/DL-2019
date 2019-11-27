@@ -37,5 +37,15 @@ class DataGenerator:
         tensor = transform(image)
         return tensor
 
+    @staticmethod
+    def deprocess_image(tensor):
+        transform = transforms.Compose([transforms.ToPILImage('RGB')])
+        return transform(tensor)
+
+    @staticmethod
+    def save_image(image_path, tensor):
+        image = DataGenerator.deprocess_image(tensor)
+        image.save(image_path)
+
     def __len__(self):
         return len(self.image_names)

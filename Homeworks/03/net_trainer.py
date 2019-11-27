@@ -145,6 +145,18 @@ def conv_block(in_ch, out_ch, kernel_size, padding, stride, activation=nn.LeakyR
     return layers
 
 
+def init_func(m):
+    classname = m.__class__.__name__
+    if hasattr(m, 'weight') and (classname.find('Conv') != -1 or classname.find('Linear') != -1):
+        nn.init.normal_(m.weight.data, 0.0, 0.02)
+        if hasattr(m, 'bias') and m.bias is not None:
+            nn.init.constant_(m.bias.data, 0.0)
+    elif classname.find(
+            'BatchNorm2d') != -1:
+        nn.init.normal_(m.weight.data, 1.0, 0.02)
+        nn.init.constant_(m.bias.data, 0.0)
+
+
 class GeneratorP2P(nn.Module):
     def __init__(self, n_blocks=6, filters=24):
         super().__init__()
@@ -155,12 +167,15 @@ class GeneratorP2P(nn.Module):
             cur_block = UNetBlock(cur_filters, cur_block)
             cur_filters //= 2
         cur_block = UNetBlock(in_ch=3, sub_block=cur_block, first_filters=cur_filters * 2, last_filters=cur_filters)
-        self.unet = cur_block
-        self.last_conv = nn.Sequential(*conv_block(cur_filters + 3, 3, 3, 1, stride=1, activation=nn.Tanh()))
+        self.model = nn.Sequential(
+            cur_block,
+            *conv_block(cur_filters + 3, 3, 3, 1, stride=1, activation=nn.Tanh())
+        )
+        self.model.apply(init_func)
+
 
     def forward(self, x):
-        unet_out = self.unet(x)
-        return self.last_conv(unet_out)
+        return self.model(x)
 
 
 class UNetBlock(nn.Module):
@@ -212,6 +227,7 @@ class DiscriminatorP2P(nn.Module):
 
         layers += conv_block(cur_outputs, 1, 1, 0, stride=1, activation=nn.Sigmoid(), use_bn=True, bn_before=True)
         self.model = nn.Sequential(*layers)
+        self.model.apply(init_func)
         #self.layers = layers
 
 

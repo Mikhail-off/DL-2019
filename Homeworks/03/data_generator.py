@@ -9,7 +9,7 @@ THREAD_COUNT = 8
 class DataGenerator:
     def __init__(self, dataset_path):
         self.dataset_path = dataset_path
-        self.image_names = list(os.listdir(dataset_path))
+        self.image_names = np.array(list(os.listdir(dataset_path)))
 
     def get_epoch_generator(self, batch_size=32, cuda=True):
         assert batch_size != 0
@@ -30,16 +30,18 @@ class DataGenerator:
             assert len(batch_tensor.shape) == 4
             width = batch_tensor.shape[3]
             yield batch_tensor[:, :, :, width // 2:], batch_tensor[:, :, :, 0:width // 2]
+        self.image_names = self.image_names[np.random.permutation(len(self.image_names))]
 
     def open_image(self, image_path):
         image = Image.open(image_path).convert('RGB')
-        img_as_array = (np.array(image) - 127.5) / 127.5
-        tensor = torch.from_numpy(img_as_array)
+        transform = transforms.Compose([transforms.ToTensor()])
+        tensor = transform(image)
+        tensor = (tensor - 0.5) / 0.5
         return tensor
 
     @staticmethod
     def deprocess_image(tensor):
-        tensor = tensor * 127.5 + 127.5
+        tensor = tensor * 0.5 + 0.5
         transform = transforms.Compose([transforms.ToPILImage('RGB')])
         image = transform(tensor)
         return image

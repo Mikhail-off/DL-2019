@@ -5,7 +5,7 @@ from torchvision import transforms
 import os
 from data_generator import DataGenerator
 from random import random
-
+from time import time
 
 def set_requires_grad(model, requires_grad=False):
     for param in model.parameters():
@@ -24,7 +24,7 @@ class ModelTrainer:
         self.discriminator = torch.load(self.BEST_DISCRIMINATOR) if load_from_best else discriminator
         self._l1_weight = l1_weight
         self._bce_weight = bce_weight
-        self._D_learn_prob = D_learn_prob
+        #self._D_learn_prob = D_learn_prob
         self.cuda = cuda
         os.makedirs(self.IMAGE_LOGS, exist_ok=True)
         os.makedirs(self.MODEL_LOGS, exist_ok=True)
@@ -129,30 +129,34 @@ class ModelTrainer:
 
         g_loss_log = []
         d_loss_log = []
-        opt_G = torch.optim.Adam(self.generator.parameters(), lr=lr_G)
-        opt_D = torch.optim.Adam(self.discriminator.parameters(), lr=lr_D)
+        opt_G = torch.optim.Adam(self.generator.parameters(), lr=lr_G, betas=(0.5, 0.999))
+        opt_D = torch.optim.Adam(self.discriminator.parameters(), lr=lr_D, betas=(0.5, 0.999))
 
         best_G_loss = None
         for epoch in range(n_epochs):
+            epoch_time = time()
             print('Epoch %d/%d\n' % (epoch, n_epochs))
             train_data_gen = train_data_epoch_gen.get_epoch_generator(batch_size=batch_size, cuda=self.cuda)
 
             logs = self.train_epoch(opt_G, opt_D, train_data_gen, len(train_data_epoch_gen),
-                                    D_learning=random() < self._D_learn_prob)
+                                    D_learning=epoch % 2 == 0)
             g_loss_log.extend(logs[0])
             d_loss_log.extend(logs[1])
-            print('Train G-loss %f, D-loss %f' % (np.mean(g_loss_log), np.mean(d_loss_log)))
+            epoch_time = time() - epoch_time
+            print('Train G-loss %f, D-loss %f for %fs' % (np.mean(logs[0]), np.mean(logs[1]), epoch_time))
+
             self.test_model(valid_data_epoch_gen.get_epoch_generator(batch_size=batch_size, cuda=self.cuda))
+
             if best_G_loss is None or np.mean(logs[0]) < best_G_loss:
+                best_G_loss = np.mean(logs[0])
                 torch.save(self.generator, self.BEST_GENERATOR)
                 torch.save(self.discriminator, self.BEST_DISCRIMINATOR)
-
-            generator_model_name = 'generator_epoch%05d.mdl' % epoch
-            discriminator_model_name = 'discriminator_epoch%05d.mdl' % epoch
-            torch.save(self.generator, os.path.join(self.MODEL_LOGS, generator_model_name))
-            torch.save(self.discriminator, os.path.join(self.MODEL_LOGS, discriminator_model_name))
-
-        self.sample_model(valid_data_epoch_gen.get_epoch_generator(batch_size=batch_size, cuda=self.cuda))
+            if epoch % 10 == 0:
+                generator_model_name = 'generator_epoch%05d.mdl' % epoch
+                discriminator_model_name = 'discriminator_epoch%05d.mdl' % epoch
+                torch.save(self.generator, os.path.join(self.MODEL_LOGS, generator_model_name))
+                torch.save(self.discriminator, os.path.join(self.MODEL_LOGS, discriminator_model_name))
+            self.sample_model(valid_data_epoch_gen.get_epoch_generator(batch_size=8, cuda=self.cuda))
 
         self.discriminator = self.discriminator.cpu()
         self.generator = self.generator.cpu()
@@ -193,7 +197,7 @@ def init_func(m):
 
 
 class GeneratorP2P(nn.Module):
-    def __init__(self, n_blocks=5, filters=16):
+    def __init__(self, n_blocks=5, filters=32):
         super().__init__()
         cur_block = None
         cur_filters = 2**(n_blocks - 2) * filters
@@ -204,7 +208,8 @@ class GeneratorP2P(nn.Module):
         cur_block = UNetBlock(in_ch=3, sub_block=cur_block, first_filters=cur_filters * 2, last_filters=cur_filters)
         self.model = nn.Sequential(
             cur_block,
-            *conv_block(cur_filters + 3, 3, 3, 1, stride=1, activation=nn.Tanh(), use_bn=False, bn_before=True)
+            *conv_block(cur_filters + 3, cur_filters, 3, 1, stride=1, use_bn=True, bn_before=True),
+            *conv_block(cur_filters, 3, 1, 0, stride=1, activation=nn.Tanh(), use_bn=False, bn_before=True)
         )
         self.model.apply(init_func)
 
@@ -216,13 +221,13 @@ class GeneratorP2P(nn.Module):
 class UNetBlock(nn.Module):
     def __init__(self, in_ch, sub_block=None, first_filters=None, last_filters=None):
         super().__init__()
-        kernel_size = 5
+        kernel_size = 3
         padding = kernel_size // 2
         layers = []
 
         down_ch = 2 * in_ch if first_filters is None else first_filters
 
-        layers += conv_block(in_ch, down_ch, kernel_size, padding, stride=2, use_bn=True, bn_before=True)
+        layers += conv_block(in_ch, down_ch, kernel_size, padding, stride=2, use_bn=False, bn_before=True)
 
         #print('Down in: %d\nDown out: %d' % (in_ch, down_ch))
         if sub_block is None:
@@ -232,20 +237,20 @@ class UNetBlock(nn.Module):
         layers += sub_block
 
         output_ch = in_ch if last_filters is None else last_filters
-        layers += conv_block(2 * down_ch, output_ch, kernel_size + 1, padding=(kernel_size - 1) // 2, stride=2, transpose=True,
-                             use_bn=False, bn_before=False, activation=nn.ReLU())
+        layers += conv_block(2 * down_ch, output_ch, kernel_size + 1, padding=1, stride=2, transpose=True,
+                             use_bn=True, bn_before=True)
         self.model = nn.Sequential(*layers)
 
     def forward(self, x):
-        # print(x.shape)
+        #print(x.shape)
         out = self.model(x)
-        # print(out.shape)
+        #print(out.shape)
         # connect over channels
         out_with_skip = torch.cat([x, out], dim=1)
         return out_with_skip
 
 class DiscriminatorP2P(nn.Module):
-    def __init__(self, conv_blocks_count=4):
+    def __init__(self, conv_blocks_count=5):
         super().__init__()
         layers = []
         cur_inputs = 3 * 2
@@ -259,8 +264,8 @@ class DiscriminatorP2P(nn.Module):
         # stride convs
         for i in range(conv_blocks_count):
             cur_outputs = min(2**i, 8) * filters
-            layers += conv_block(cur_inputs, cur_outputs, kernel_size, padding, stride=2, use_bn=True, bn_before=True)
-            layers += conv_block(cur_outputs, cur_outputs, kernel_size, padding, stride=1, use_bn=True, bn_before=True)
+            layers += conv_block(cur_inputs, cur_outputs, kernel_size, padding, stride=2, use_bn=False, bn_before=True)
+            #layers += conv_block(cur_outputs, cur_outputs, kernel_size, padding, stride=1, use_bn=True, bn_before=True)
             cur_inputs = cur_outputs
 
         layers += conv_block(cur_outputs, 1, 1, 0, stride=1, activation=nn.Sigmoid(), use_bn=False, bn_before=True)

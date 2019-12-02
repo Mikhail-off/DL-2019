@@ -10,22 +10,22 @@ DATA_PATH = 'data/'
 TRAIN_FOLDER = 'train'
 VAL_FOLDER = 'val'
 
-N_EPOCHS = 10
+N_EPOCHS = 2001
 LR_G = 2e-4
 LR_D = 2e-4
 BATCH_SIZE = 8
 CUDA = True
-L1_WEIGHT = 30
+L1_WEIGHT = 100.
 BCE_WEIGHT = 1
 LOAD = True
-D_LEARN_PROB = 0.4
+#D_LEARN_PROB = 0.5
 
 def main():
     dataset_downloader = DatasetDownloader(DATASET_NAMES, DATA_PATH)
     dataset_downloader.download()
 
     trainer = ModelTrainer(GeneratorP2P(), DiscriminatorP2P(), l1_weight=L1_WEIGHT, bce_weight=BCE_WEIGHT,
-                           load_from_best=LOAD, D_learn_prob=D_LEARN_PROB, cuda=CUDA)
+                           load_from_best=LOAD, cuda=CUDA)
 
     facades_train = DataGenerator(os.path.join(DATA_PATH, DATASET_NAMES[0], TRAIN_FOLDER))
     facades_val = DataGenerator(os.path.join(DATA_PATH, DATASET_NAMES[0], VAL_FOLDER))

@@ -62,18 +62,9 @@ def main():
         model = TranslationModel(len(train_generator.data.word2index), len(train_generator.target.word2index), HIDDEN_SIZE,
                              N_LAYERS, is_cuda=IS_CUDA)
     trainer.set_model(model)
-<<<<<<< HEAD
+
     trainer.train(n_epochs=10, cuda=IS_CUDA, lr=LEARNING_RATE)
     predict(TEST_FILE_DE, model, train_generator.target.index2word,  train_generator.data.sentence2vector)
-=======
-    trainer.train(n_epochs=N_EPOCH, cuda=IS_CUDA, lr=LEARNING_RATE, is_force=False)
-
-    #predict(TRAIN_FILE_DE, TRAIN_FILE_EN + '.txt', model, train_generator.target.index2word,
-    #        train_generator.data.sentence2vector)
-    #predict(VALIDATION_FILE_DE, VALIDATION_FILE_EN + '.txt', model, train_generator.target.index2word,
-    #        train_generator.data.sentence2vector)
-    predict(TEST_FILE_DE, TEST_FILE_EN, model, train_generator.target.index2word,  train_generator.data.sentence2vector)
->>>>>>> bdb18be75ff2c5a148457f7fb6f514f02a028939
 
 if __name__ == '__main__':
     main()
